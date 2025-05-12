@@ -1,8 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- DOM Elements (same as before) ---
+    // --- DOM Elements ---
     const setupScreen = document.getElementById('setup-screen');
     const sessionScreen = document.getElementById('session-screen');
-    const routineSelect = document.getElementById('routine-select');
+    // MODIFICADO: Ya no se usa routineSelect, se añade routineFileInput
+    const routineFileInput = document.getElementById('routine-file-input');
+    const loadedFileNameP = document.getElementById('loaded-file-name'); // Para mostrar el nombre del archivo
     const musicSelect = document.getElementById('music-select');
     const voiceSelect = document.getElementById('voice-select');
     const startSessionBtn = document.getElementById('start-session-btn');
@@ -19,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const playIconSVG = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
     const pauseIconSVG = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
 
-    // --- State Variables (same as before) ---
+    // --- State Variables ---
     let currentRoutine = [];
     let currentStepIndex = 0;
     let isPlaying = false;
@@ -29,61 +31,26 @@ document.addEventListener('DOMContentLoaded', () => {
     let synth = window.speechSynthesis;
     let availableVoices = [];
     let currentTimeoutId = null;
+    let uploadedRoutineString = null; // NUEVO: Para almacenar el contenido del archivo cargado
 
-    // --- Data Definitions (Routines & Music) ---
-    // NEW: Routines are now in raw string format
-    const routinesRaw = {
-        "Rutina Corta (Estilo Script)": `
-Bienvenida a tu rutina corta de mañana. / [PAUSE:3]Vamos a empezar con energía.
-[EJERCICIO:1] Calentamiento: Círculos de Hombros
-Realiza 10 círculos hacia adelante y 10 hacia atrás.
-Observa la imagen [IMAGEN:shoulder_circles.webp]
-[PAUSE:20] Muy bien. Siguiente.
-[EJERCICIO:2] El Gato-Vaca
-Alterna entre la postura del gato y la vaca durante 5 respiraciones completas.
-[IMAGEN:cat_cow.webp] / [PAUSE:30] Perfecto.
-[TIEMPO]
-Estiramiento final. Mantén cada estiramiento 15 segundos. / [IMAGEN:final_stretch.webp]
-[PAUSE:15]
-Has completado tu rutina. ¡Que tengas un gran día!
-        `,
-        "Relajación Nocturna (Estilo Script)": `
-Es hora de relajarse. Prepara tu cuerpo para un descanso profundo.
-[EJERCICIO:1] Respiración Diafragmática
-Inhala profundamente por la nariz, expandiendo tu abdomen. Exhala lentamente por la boca. 5 ciclos.
-[PAUSE:45] Siente la calma.
-[EJERCICIO:2] Postura del Niño. / Mantén la postura del niño durante 1 minuto, respirando suavemente.
-[IMAGEN:child_pose.webp]
-[PAUSE:60] Liberando tensiones.
-[TIEMPO]
-Sesión de relajación completada. Dulces sueños.
-        `
-    };
-
-    const musicTracks = { // Paths relative to index.html
+    // --- Data Definitions (Music) ---
+    // routinesRaw ya no se usa para la selección, pero el parser sigue siendo necesario
+    const musicTracks = {
         "Música Relajante": "assets/music/relaxing_tune.mp3",
         "Sonidos de la Naturaleza": "assets/music/nature_sounds.mp3"
     };
 
-    // --- NEW: Text Processor Function ---
+    // --- Text Processor Function (parseRawRoutineString - sin cambios) ---
     function parseRawRoutineString(rawString) {
         const lines = rawString.trim().split('\n');
         let parsedRoutine = [];
 
         lines.forEach(lineContent => {
-            if (!lineContent.trim()) return; // Skip empty lines
-
-            const parts = lineContent.split('/'); // Split by '/' for multiple commands per line
-
+            if (!lineContent.trim()) return;
+            const parts = lineContent.split('/');
             parts.forEach(partText => {
                 let segment = partText.trim();
                 if (!segment) return;
-
-                // Order of regex matching is important to correctly capture text around tags.
-
-                // 1. [PAUSE:duration]OptionalTextAfterTag
-                // Python: speak(OptionalTextAfterTag) THEN speak(duration) THEN sleep(duration)
-                // JS: if(OptionalTextAfterTag) speak(), THEN {type:"pause", duration:D} (JS pause handler announces duration)
                 let match = segment.match(/^\[PAUSE:(\d+)\](.*)$/i);
                 if (match) {
                     const duration = parseInt(match[1], 10);
@@ -92,53 +59,41 @@ Sesión de relajación completada. Dulces sueños.
                         parsedRoutine.push({ type: "speak", text: textContent });
                     }
                     parsedRoutine.push({ type: "pause", duration: duration });
-                    return; // Segment processed
+                    return;
                 }
-
-                // 2. TextBeforeTag[IMAGEN:filename]TextAfterTag
                 match = segment.match(/^(.*?)\[IMAGEN:\s*([^\]]+)\](.*)$/i);
                 if (match) {
                     const textBefore = match[1].trim();
                     const imageName = match[2].trim();
                     const textAfter = match[3].trim();
-
                     if (textBefore) {
                         parsedRoutine.push({ type: "speak", text: textBefore });
                     }
-                    // Assuming images are in assets/images/ and routine string just has filename
                     parsedRoutine.push({ type: "image", src: `assets/images/${imageName}`, alt: imageName });
                     if (textAfter) {
                         parsedRoutine.push({ type: "speak", text: textAfter });
                     }
-                    return; // Segment processed
+                    return;
                 }
-
-                // 3. [TIEMPO]
                 match = segment.match(/^\[TIEMPO\]$/i);
                 if (match) {
                     parsedRoutine.push({ type: "time" });
-                    return; // Segment processed
+                    return;
                 }
-
-                // 4. [EJERCICIO:num]OptionalDescription
                 match = segment.match(/^\[EJERCICIO:\s*(\d+)\](.*)$/i);
                 if (match) {
                     const exerciseNum = parseInt(match[1], 10);
                     const description = match[2].trim();
-                    // The JS 'exercise' handler will announce "Ejercicio {num}. {description}"
                     parsedRoutine.push({ type: "exercise", number: exerciseNum, text: description });
-                    return; // Segment processed
+                    return;
                 }
-
-                // 5. If no tags matched, it's plain text to speak
                 parsedRoutine.push({ type: "speak", text: segment });
             });
         });
         return parsedRoutine;
     }
 
-
-    // --- Functions (populateVoices, speak, updateTimer - same as before) ---
+    // --- Functions (populateVoices, speak, updateTimer - sin cambios) ---
     function populateVoices() {
         availableVoices = synth.getVoices();
         voiceSelect.innerHTML = '';
@@ -168,6 +123,7 @@ Sesión de relajación completada. Dulces sueños.
                 voiceSelect.appendChild(option);
              });
         }
+
         if (defaultVoiceURI) {
             const selectedOpt = Array.from(voiceSelect.options).find(opt => opt.getAttribute('data-name') === defaultVoiceURI);
             if (selectedOpt) selectedOpt.selected = true;
@@ -178,11 +134,8 @@ Sesión de relajación completada. Dulces sueños.
 
     function speak(textToSpeak, onEndCallback) {
         if (synth.speaking) {
-            console.warn('SpeechSynthesis is currently speaking. Queueing or skipping.');
-            // Simple approach: if speaking, wait a bit and try again, or just call onEnd.
-            // For robust queueing, a proper queue mechanism would be needed.
-            // For now, let's assume it's okay or the user can pause/play.
-            if (onEndCallback) setTimeout(onEndCallback, 100); // Try to proceed after a short delay
+            console.warn('SpeechSynthesis is currently speaking.');
+            if (onEndCallback) setTimeout(onEndCallback, 100);
             return;
         }
         if (textToSpeak && textToSpeak.trim() !== "") {
@@ -195,7 +148,6 @@ Sesión de relajación completada. Dulces sueños.
                     if (voice) utterThis.voice = voice;
                 }
             }
-
             utterThis.onend = () => {
                 if (onEndCallback) onEndCallback();
             };
@@ -218,74 +170,57 @@ Sesión de relajación completada. Dulces sueños.
         elapsedTimeSpan.textContent = `${minutes}:${seconds}`;
     }
 
-    // --- Core Logic: processStep ---
-    // (Adjusted 'exercise' case)
+
+    // --- Core Logic: processStep (sin cambios) ---
     function processStep() {
         if (currentStepIndex >= currentRoutine.length) {
             speak("Rutina completada.", stopSession);
             return;
         }
-
         if (isPausedManually) return;
-
         const step = currentRoutine[currentStepIndex];
         currentImageImg.classList.add('hidden');
-
         if (currentTimeoutId) {
             clearTimeout(currentTimeoutId);
             currentTimeoutId = null;
         }
-
         switch (step.type) {
             case "speak":
-                speak(step.text, () => {
-                    currentStepIndex++;
-                    processStep();
-                });
+                speak(step.text, () => { currentStepIndex++; processStep(); });
                 break;
             case "image":
-                // Text before image should be handled by a preceding "speak" step from parser
                 currentImageImg.src = step.src;
                 currentImageImg.alt = step.alt || "Imagen del ejercicio";
                 currentImageImg.classList.remove('hidden');
-                currentInstructionP.textContent = step.alt || "Observa la imagen."; // Display something while image loads
-                // If there was text to speak specifically WITH the image, parser should create a separate speak step.
+                currentInstructionP.textContent = step.alt || "Observa la imagen.";
                 currentStepIndex++;
-                processStep(); // Proceed immediately, image displays while next step might be prepped
+                processStep();
                 break;
             case "pause":
                 const pauseDurationMs = step.duration * 1000;
-                // Text before pause announcement should be handled by a "speak" step from parser
-                speak(`${step.duration} segundos de pausa.`, () => { // Announce pause duration
+                speak(`${step.duration} segundos de pausa.`, () => {
                     currentInstructionP.textContent = `Pausa de ${step.duration} segundos...`;
                     currentTimeoutId = setTimeout(() => {
                         currentTimeoutId = null;
-                        // Text after pause should be handled by a subsequent "speak" step from parser
                         currentStepIndex++;
                         processStep();
                     }, pauseDurationMs);
                 });
                 break;
-            case "exercise": // UPDATED to work with parser output
+            case "exercise":
                 let exerciseAnnouncement = `Ejercicio ${step.number}`;
-                if (step.text && step.text.trim() !== "") { // step.text is the description from "[EJERCICIO:1] Description"
+                if (step.text && step.text.trim() !== "") {
                     exerciseAnnouncement += `. ${step.text.trim()}`;
                     currentExerciseSpan.textContent = `Ejercicio ${step.number}: ${step.text.trim()}`;
                 } else {
                     currentExerciseSpan.textContent = `Ejercicio ${step.number}`;
                 }
-                speak(exerciseAnnouncement, () => {
-                    currentStepIndex++;
-                    processStep();
-                });
+                speak(exerciseAnnouncement, () => { currentStepIndex++; processStep(); });
                 break;
             case "time":
                 const now = Date.now();
                 const elapsedMinutes = Math.floor((now - startTime) / 60000);
-                speak(`Han transcurrido ${elapsedMinutes} minutos.`, () => {
-                    currentStepIndex++;
-                    processStep();
-                });
+                speak(`Han transcurrido ${elapsedMinutes} minutos.`, () => { currentStepIndex++; processStep(); });
                 break;
             default:
                 console.warn("Tipo de paso desconocido:", step);
@@ -294,29 +229,24 @@ Sesión de relajación completada. Dulces sueños.
         }
     }
 
-    // --- Control Functions (startSession, stopSession, togglePlayPause) ---
-    // (Updated startSession to use the parser)
+    // --- Control Functions ---
+    // MODIFICADO: startSession ahora usa uploadedRoutineString
     function startSession() {
-        const selectedRoutineKey = routineSelect.value;
         const selectedMusicKey = musicSelect.value;
 
-        if (!selectedRoutineKey) {
-            alert("Por favor, selecciona una rutina.");
+        if (!uploadedRoutineString) { // Verifica si se ha cargado un archivo
+            alert("Por favor, carga un archivo de rutina (.txt) primero.");
             return;
         }
 
-        // UPDATED: Parse the raw routine string
-        const rawString = routinesRaw[selectedRoutineKey];
-        if (!rawString) {
-            alert("Definición de rutina no encontrada.");
-            return;
-        }
-        currentRoutine = parseRawRoutineString(rawString);
+        currentRoutine = parseRawRoutineString(uploadedRoutineString); // Parsea el contenido del archivo
         if (!currentRoutine || currentRoutine.length === 0) {
-            alert("La rutina seleccionada está vacía o no pudo ser procesada.");
+            alert("El archivo de rutina está vacío o no pudo ser procesado. Verifica el formato.");
+            loadedFileNameP.textContent = "Error al procesar el archivo. Intenta de nuevo.";
+            loadedFileNameP.style.color = "red";
             return;
         }
-        // console.log("Parsed Routine:", currentRoutine); // For debugging
+        // console.log("Parsed Routine from file:", currentRoutine); // For debugging
 
         currentStepIndex = 0;
         isPlaying = true;
@@ -343,7 +273,7 @@ Sesión de relajación completada. Dulces sueños.
         processStep();
     }
 
-    function stopSession() { // Mostly same as before
+    function stopSession() { // Sin cambios significativos
         isPlaying = false;
         isPausedManually = false;
         playPauseBtn.innerHTML = playIconSVG;
@@ -356,63 +286,91 @@ Sesión de relajación completada. Dulces sueños.
         backgroundMusicAudio.pause();
         backgroundMusicAudio.currentTime = 0;
         currentStepIndex = 0;
-        currentInstructionP.textContent = "Sesión detenida. Elige una rutina para comenzar.";
+        currentInstructionP.textContent = "Sesión detenida. Carga una rutina para comenzar.";
         sessionScreen.classList.add('hidden');
         setupScreen.classList.remove('hidden');
+        // Reset file input display
+        // routineFileInput.value = ""; // Esto puede ser problemático por seguridad en algunos navegadores
+        loadedFileNameP.textContent = "";
+        uploadedRoutineString = null;
     }
 
-    function togglePlayPause() { // Mostly same as before
-        if (!currentRoutine.length && !isPlaying) return; // No routine loaded or not even started
-
+    function togglePlayPause() { // Sin cambios significativos
+        if (!currentRoutine.length && !isPlaying) return;
         if (isPlaying && !isPausedManually) {
             isPausedManually = true;
             playPauseBtn.innerHTML = playIconSVG;
             synth.pause();
             if(currentTimeoutId) {
-                 // This is tricky. For simplicity, manual pause overrides command pause.
-                 // To resume accurately, we'd need to calculate remaining duration of command pause.
                 clearTimeout(currentTimeoutId);
-                // We don't reset currentTimeoutId here so resume logic can know it was in a command pause
             }
             backgroundMusicAudio.pause();
-            if (timerInterval) clearInterval(timerInterval); // Pause the visual timer
+            if (timerInterval) clearInterval(timerInterval);
             currentInstructionP.textContent = "Sesión pausada.";
-        } else { // Is paused (either manually or finished playing), so play/resume
+        } else {
             isPausedManually = false;
-            isPlaying = true; // Ensure isPlaying is true when resuming
+            isPlaying = true;
             playPauseBtn.innerHTML = pauseIconSVG;
             synth.resume();
             backgroundMusicAudio.play().catch(e => console.error("Error al reproducir música al resumir:", e));
-
-            // Restart visual timer only if it was running (startTime is set)
             if (startTime > 0 && !timerInterval) {
                  timerInterval = setInterval(updateTimer, 1000);
             }
-
-            // If it was paused during a [PAUSE:...] command, that command's setTimeout was cleared.
-            // We need to decide how to resume. Easiest is to just continue to next step if speech isn't active.
-            // Or, if currentTimeoutId was set (meaning we interrupted a command pause), we might need to restart that command's logic.
-            // For now, if synth isn't speaking, trigger processStep to evaluate the current step again (or next if index moved).
             if (!synth.speaking) {
-                // If we were in a command pause (currentTimeoutId was not null when paused),
-                // we effectively skipped the remainder of that pause.
-                // Calling processStep() will move to the next logical action.
                 processStep();
             }
-             // If synth was speaking and is resumed, its onend callback will call processStep().
         }
     }
 
+    // --- NUEVO: Manejador para la carga de archivos ---
+    function handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (file) {
+            if (file.type === "text/plain") {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    uploadedRoutineString = e.target.result;
+                    loadedFileNameP.textContent = `Archivo cargado: ${file.name}`;
+                    loadedFileNameP.style.color = "#555"; // Color normal
+                    // Opcional: intentar parsear aquí para validación temprana
+                    // try {
+                    //    const testParse = parseRawRoutineString(uploadedRoutineString);
+                    //    if(!testParse || testParse.length === 0) throw new Error("Rutina vacía o inválida");
+                    //    startSessionBtn.disabled = false; // Habilitar botón si es válido
+                    // } catch (error) {
+                    //    loadedFileNameP.textContent = `Error en formato de archivo: ${file.name}`;
+                    //    startSessionBtn.disabled = true;
+                    //    uploadedRoutineString = null;
+                    // }
+                };
+                reader.onerror = () => {
+                    console.error("Error al leer el archivo.");
+                    loadedFileNameP.textContent = "Error al leer el archivo.";
+                    loadedFileNameP.style.color = "red";
+                    uploadedRoutineString = null;
+                    // startSessionBtn.disabled = true;
+                };
+                reader.readAsText(file);
+            } else {
+                alert("Por favor, selecciona un archivo de texto plano (.txt).");
+                loadedFileNameP.textContent = "Tipo de archivo no válido.";
+                loadedFileNameP.style.color = "red";
+                event.target.value = ""; // Resetea el input de archivo
+                uploadedRoutineString = null;
+                // startSessionBtn.disabled = true;
+            }
+        } else {
+            uploadedRoutineString = null;
+            loadedFileNameP.textContent = "";
+            // startSessionBtn.disabled = true;
+        }
+    }
 
     // --- Initialize App ---
     function initializeApp() {
-        // Populate routine select from new raw routines
-        for (const key in routinesRaw) {
-            const option = document.createElement('option');
-            option.value = key;
-            option.textContent = key;
-            routineSelect.appendChild(option);
-        }
+        // MODIFICADO: Ya no se populan las rutinas desde routinesRaw
+        // en un select, se añade listener para el input de archivo.
+        routineFileInput.addEventListener('change', handleFileUpload);
 
         for (const key in musicTracks) {
             const option = document.createElement('option');
@@ -429,6 +387,7 @@ Sesión de relajación completada. Dulces sueños.
         startSessionBtn.addEventListener('click', startSession);
         playPauseBtn.addEventListener('click', togglePlayPause);
         stopBtn.addEventListener('click', stopSession);
+        // startSessionBtn.disabled = true; // Deshabilitar al inicio hasta que se cargue un archivo válido
     }
 
     if (typeof speechSynthesis === 'undefined') {
@@ -436,6 +395,7 @@ Sesión de relajación completada. Dulces sueños.
         startSessionBtn.disabled = true;
         playPauseBtn.disabled = true;
         stopBtn.disabled = true;
+        if(routineFileInput) routineFileInput.disabled = true;
         return;
     }
     initializeApp();

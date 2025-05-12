@@ -1,3 +1,15 @@
+/* ... (resto de tu CSS) ... */
+
+.file-info {
+    font-size: 0.9em;
+    color: #555;
+    margin-top: 5px;
+}
+
+/* ... (resto de tu CSS) ... */
+
+
+
 :root {
     --primary-color: #6e8efb;
     --secondary-color: #a777e3;

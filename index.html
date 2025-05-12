@@ -16,11 +16,13 @@
         <main id="main-content">
             <div id="setup-screen">
                 <h2>Configuración de la Sesión</h2>
+                
                 <div class="form-group">
-                    <label for="routine-select">Elige tu rutina:</label>
-                    <select id="routine-select">
-                        </select>
+                    <label for="routine-file-input">Carga tu archivo de rutina (.txt):</label>
+                    <input type="file" id="routine-file-input" accept=".txt,text/plain">
+                    <p id="loaded-file-name" class="file-info"></p>
                 </div>
+                
                 <div class="form-group">
                     <label for="music-select">Música de fondo (opcional):</label>
                     <select id="music-select">
@@ -47,7 +49,9 @@
                 </div>
 
                 <div class="controls">
-                    <button id="play-pause-btn" class="btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button> <button id="stop-btn" class="btn"><svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg></button> </div>
+                    <button id="play-pause-btn" class="btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+                    <button id="stop-btn" class="btn"><svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg></button>
+                </div>
             </div>
         </main>
 
