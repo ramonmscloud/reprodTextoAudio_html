@@ -1,0 +1,9 @@
+Hola, este es un ejemplo de síntesis de voz.
+[PAUSE:2] 
+Ahora hay una pausa de dos segundos. 
+[PAUSE:1] 
+Otra.
+[PAUSE:5]
+Continuamos después de otra pausa.
+seguimos
+Y esta no la lee

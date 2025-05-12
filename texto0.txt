@@ -1,0 +1,3 @@
+Hola, este es un ejemplo de síntesis de voz.
+Esta es la segunda línea del texto.
+Y aquí va una tercera línea.

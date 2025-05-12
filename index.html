@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guía de Pilates Interactiva</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>Pilates Interactivo</h1>
+        </header>
+
+        <main id="main-content">
+            <div id="setup-screen">
+                <h2>Configuración de la Sesión</h2>
+                <div class="form-group">
+                    <label for="routine-select">Elige tu rutina:</label>
+                    <select id="routine-select">
+                        </select>
+                </div>
+                <div class="form-group">
+                    <label for="music-select">Música de fondo (opcional):</label>
+                    <select id="music-select">
+                        <option value="">Sin música</option>
+                        </select>
+                </div>
+                 <div class="form-group">
+                    <label for="voice-select">Voz (si hay varias disponibles):</label>
+                    <select id="voice-select"></select>
+                </div>
+                <button id="start-session-btn" class="btn btn-primary">Comenzar Sesión</button>
+            </div>
+
+            <div id="session-screen" class="hidden">
+                <div id="instruction-area">
+                    <p id="current-instruction">Presiona play para comenzar...</p>
+                    <img id="current-image" src="" alt="Ejercicio actual" class="hidden">
+                </div>
+                <div id="timer-area">
+                    Tiempo transcurrido: <span id="elapsed-time">00:00</span>
+                </div>
+                <div id="exercise-area">
+                    <span id="current-exercise"></span>
+                </div>
+
+                <div class="controls">
+                    <button id="play-pause-btn" class="btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button> <button id="stop-btn" class="btn"><svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg></button> </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Creado con HTML, CSS y JavaScript</p>
+        </footer>
+    </div>
+
+    <audio id="background-music" loop></audio>
+    <script src="script.js"></script>
+</body>
+</html>
